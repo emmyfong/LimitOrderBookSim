@@ -64,7 +64,19 @@ void OrderBook::matchOrders() {
 }
 
 void OrderBook::cancelOrder(uint64_t orderId) {
-   return; 
+    //Iterate through all price levels in bids
+    for (auto& priceLevel : bids_) {
+        auto& queue = priceLevel.second;
+        for (auto it = queue.begin(); it != queue.end(); ++it) {
+            if (it->orderId == orderId) {
+                queue.erase(it);
+                if (queue.empty()) {
+                    asks_.erase(priceLevel.first);
+                }
+                return;
+            }
+        }
+    }
 }
 
 bool OrderBook::hasBids() const { return !bids_.empty(); }
