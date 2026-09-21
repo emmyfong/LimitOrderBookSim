@@ -15,10 +15,20 @@ int main() {
 
     //buyers (bids)
     lob.addOrder({3, OrderSide::BUY, OrderType::LIMIT, 14900, 50, getNextTime()});
-    lob.addOrder({4, OrderSide::BUY, OrderType::LIMIT, 14000, 75, getNextTime()});
+    lob.addOrder({4, OrderSide::BUY, OrderType::LIMIT, 14800, 75, getNextTime()});
 
     //Spread is currently 150 (ask) - 149 (bids) so no trade should happen
     lob.printBook();
+
+    std::cout << "\n[2] Testing Calculation...\n";
+    std::cout << "-> Incoming: BUY 120 shares at $150.00\n";
+
+    lob.addOrder({5, OrderSide::BUY,  OrderType::LIMIT, 15000, 120, getNextTime()});
+
+    lob.printBook();
+
+    std::cout << "\n[3] Testing Cancelled...";
+    std::cout << "-> Canceling Order #4 (BUY 75 shares $148.00)\n";
 
     lob.cancelOrder(4);
 
