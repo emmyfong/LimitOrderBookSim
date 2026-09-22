@@ -3,14 +3,19 @@
 #include <algorithm> //for std::min
 
 void OrderBook::addOrder(const Order& order) {
-    //Put the order on the right side of the book (ie bid vs asks)
+    //Get the market order
+    if (order.type == OrderType::MARKET) {
+        executeMarketOrder(order);
+        return;
+    }
+
+    //limit orders proceed
     if (order.side == OrderSide::BUY) {
         bids_[order.price].push_back(order);
     } else {
         asks_[order.price].push_back(order);
     }
-
-    //and then try to match the order
+    
     matchOrders();
 }
 
@@ -106,4 +111,46 @@ void OrderBook::printBook() const {
         std::cout << "$" << pair.first << " | Vol: " << totalVolume << " | Orders: " << pair.second.size() << "\n";
     }
     std::cout << "======================================\n";
+}
+
+void OrderBook::executeMarketOrder(const Order& incomingOrder) {
+    uint32_t remainingQuanitity = incomingOrder.quantity;
+
+    if (incomingOrder.side == OrderSide::BUY) {
+        //A market buy looks through the asks
+        while (remainingQuanitity > 0 && !asks_.empty()) {
+            auto bestAskIter = asks_.begin();
+            auto& askQueue = bestAskIter->second;
+            Order& topAsk = askQueue.front();
+
+            uint32_t tradeQuantity = std::min(remainingQuanitity, topAsk.quantity);
+            remainingQuanitity -= tradeQuantity;
+            topAsk.quantity -= tradeQuantity;
+
+            if (topAsk.quantity == 0) {
+                askQueue.pop_front();
+            }
+            if (askQueue.empty()) {
+                asks_.erase(bestAskIter);
+            }
+        }
+    } else {
+        //market sell goes through the bids
+        while (remainingQuanitity > 0 && bids_.empty()) {
+            auto bestBidIter = bids_.begin();
+            auto& bidQueue = bestBidIter->second;
+            Order& topBid = bidQueue.front();
+
+            uint32_t tradeQuantity = std::min(remainingQuanitity, topBid.quantity);
+            remainingQuanitity -= tradeQuantity;
+            topBid.quantity -= tradeQuantity;
+
+            if (topBid.quantity == 0) {
+                bidQueue.pop_front();
+            }
+            if (bidQueue.empty()) {
+                bids_.erase(bestBidIter);
+            }
+        }
+    }
 }

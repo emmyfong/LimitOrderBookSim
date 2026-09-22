@@ -27,6 +27,9 @@ private:
     //internal matching alg for new orders
     void matchOrders();
 
+    //logic for market orders
+    void executeMarketOrder(const Order& order);
+
     //Buyers are sorted in decending order (highest price first)
     //std::greater sorts highest key first
     std::map<uint64_t, std::list<Order>, std::greater<uint64_t>> bids_;
