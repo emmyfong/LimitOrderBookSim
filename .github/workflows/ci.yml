@@ -28,3 +28,6 @@ jobs:
 
         - name: Compile Main Simulator (Verify Build Doesn't Break)
           run: g++ -std=c++17 -O3 -pthread -Iinclude src/*.cpp -o lob_sim
+
+        - name: Compile Cancel Latency Benchmark (Verify Build Doesn't Break)
+          run: g++ -std=c++17 -O3 -Iinclude src/OrderBook.cpp benchmarks/bench_cancel.cpp -o bench_cancel

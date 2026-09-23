@@ -18,6 +18,7 @@ enum class OrderType {
 //data structure for a single trade
 struct Order {
     uint64_t orderId;
+    uint64_t traderId;
     OrderSide side;
     OrderType type;
     uint64_t price;

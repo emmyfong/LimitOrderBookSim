@@ -3,3 +3,4 @@ lob_sim
 run_tests
 run_tests_orderbook
 run_tests_csvparser
+bench_cancel

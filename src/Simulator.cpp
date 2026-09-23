@@ -23,7 +23,16 @@ void Simulator::consumerLoop() {
 
     //pop orders out of queue until return false
     while (orderQueue_.pop(order)) {
-        lob_.addOrder(order);
+        OrderResult result = lob_.addOrder(order);
+
+        if (result.status == OrderStatus::Rejected) {
+            std::cout << "ORDER REJECTED: id=" << order.orderId << " trader=" << order.traderId
+                       << " reason=" << result.reason << "\n";
+        } else if (result.status == OrderStatus::PartiallyFilled && result.reason != nullptr) {
+            std::cout << "ORDER PARTIALLY FILLED THEN STOPPED: id=" << order.orderId
+                       << " trader=" << order.traderId << " filled=" << result.filledQuantity
+                       << " reason=" << result.reason << "\n";
+        }
     }
 }
 

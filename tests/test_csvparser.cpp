@@ -17,13 +17,14 @@ void writeCsv(const std::string& path, const std::string& content) {
 
 void test_parses_valid_line() {
     const std::string path = "test_scratch_valid.csv";
-    writeCsv(path, "1,BUY,LIMIT,15000,100,42\n");
+    writeCsv(path, "1,100,BUY,LIMIT,15000,100,42\n");
 
     std::vector<Order> orders = CSVParser::parse(path);
     std::remove(path.c_str());
 
     assert(orders.size() == 1);
     assert(orders[0].orderId == 1);
+    assert(orders[0].traderId == 100);
     assert(orders[0].side == OrderSide::BUY);
     assert(orders[0].type == OrderType::LIMIT);
     assert(orders[0].price == 15000);
@@ -36,9 +37,9 @@ void test_parses_valid_line() {
 void test_skips_non_numeric_field_without_crashing() {
     const std::string path = "test_scratch_bad_number.csv";
     writeCsv(path,
-        "1,BUY,LIMIT,15000,100,1\n"
-        "2,BUY,LIMIT,notanumber,100,2\n"
-        "3,BUY,LIMIT,15000,100,3\n");
+        "1,100,BUY,LIMIT,15000,100,1\n"
+        "2,100,BUY,LIMIT,notanumber,100,2\n"
+        "3,100,BUY,LIMIT,15000,100,3\n");
 
     std::vector<Order> orders = CSVParser::parse(path);
     std::remove(path.c_str());
@@ -55,9 +56,9 @@ void test_skips_non_numeric_field_without_crashing() {
 void test_skips_line_with_missing_fields() {
     const std::string path = "test_scratch_missing_fields.csv";
     writeCsv(path,
-        "1,BUY,LIMIT,15000,100,1\n"
-        "2,BUY,LIMIT\n"
-        "3,SELL,LIMIT,15100,50,3\n");
+        "1,100,BUY,LIMIT,15000,100,1\n"
+        "2,100,BUY,LIMIT\n"
+        "3,100,SELL,LIMIT,15100,50,3\n");
 
     std::vector<Order> orders = CSVParser::parse(path);
     std::remove(path.c_str());
@@ -71,7 +72,7 @@ void test_skips_line_with_missing_fields() {
 
 void test_rejects_invalid_side_instead_of_defaulting() {
     const std::string path = "test_scratch_bad_side.csv";
-    writeCsv(path, "1,BUYY,LIMIT,15000,100,1\n");
+    writeCsv(path, "1,100,BUYY,LIMIT,15000,100,1\n");
 
     std::vector<Order> orders = CSVParser::parse(path);
     std::remove(path.c_str());
@@ -84,7 +85,7 @@ void test_rejects_invalid_side_instead_of_defaulting() {
 
 void test_rejects_invalid_type_instead_of_defaulting() {
     const std::string path = "test_scratch_bad_type.csv";
-    writeCsv(path, "1,BUY,LIMITT,15000,100,1\n");
+    writeCsv(path, "1,100,BUY,LIMITT,15000,100,1\n");
 
     std::vector<Order> orders = CSVParser::parse(path);
     std::remove(path.c_str());
@@ -97,7 +98,7 @@ void test_rejects_invalid_type_instead_of_defaulting() {
 
 void test_skips_blank_lines() {
     const std::string path = "test_scratch_blank_lines.csv";
-    writeCsv(path, "1,BUY,LIMIT,15000,100,1\n\n3,SELL,LIMIT,15100,50,3\n");
+    writeCsv(path, "1,100,BUY,LIMIT,15000,100,1\n\n3,100,SELL,LIMIT,15100,50,3\n");
 
     std::vector<Order> orders = CSVParser::parse(path);
     std::remove(path.c_str());

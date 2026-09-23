@@ -6,8 +6,7 @@
 
 namespace {
 
-//Reads the next comma-separated field, or throws if the line ran out of
-//fields early (e.g. a truncated row).
+//Read the next field or throw if the line run out of fields early
 std::string nextField(std::stringstream& ss, const char* fieldName) {
     std::string token;
     if (!std::getline(ss, token, ',')) {
@@ -16,15 +15,14 @@ std::string nextField(std::stringstream& ss, const char* fieldName) {
     return token;
 }
 
-//Parses one CSV line into an Order. Throws std::invalid_argument (or
-//std::out_of_range, from stoull/stoul) on any malformed field so the
-//caller can skip just that line instead of crashing the whole parse.
+//Parses one csv line into an order
 Order parseLine(const std::string& line) {
     std::stringstream ss(line);
     Order order{};
 
     //convert string to unsigned long long
     order.orderId = std::stoull(nextField(ss, "orderId"));
+    order.traderId = std::stoull(nextField(ss, "traderId"));
 
     std::string side = nextField(ss, "side");
     if (side == "BUY") {

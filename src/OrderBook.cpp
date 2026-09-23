@@ -3,11 +3,16 @@
 #include <algorithm> //for std::min
 #include <iterator>  //for std::prev
 
-void OrderBook::addOrder(const Order& order) {
+namespace {
+constexpr const char* kSelfTradeReason =
+    "self-trade prevention: order would cross trader's own resting order";
+constexpr const char* kNoLiquidityReason = "no resting liquidity available to match against";
+} // namespace
+
+OrderResult OrderBook::addOrder(const Order& order) {
     //Get the market order
     if (order.type == OrderType::MARKET) {
-        executeMarketOrder(order);
-        return;
+        return executeMarketOrder(order);
     }
 
     //limit orders proceed
@@ -21,10 +26,25 @@ void OrderBook::addOrder(const Order& order) {
         orderIndex_[order.orderId] = {OrderSide::SELL, order.price, std::prev(queue.end())};
     }
 
-    matchOrders();
+    MatchOutcome outcome = matchOrders(order.side);
+
+    if (outcome.filledQuantity >= order.quantity) {
+        return {OrderStatus::Filled, outcome.filledQuantity, nullptr};
+    }
+    if (outcome.selfTradeBlocked) {
+        return outcome.filledQuantity == 0
+            ? OrderResult{OrderStatus::Rejected, 0, kSelfTradeReason}
+            : OrderResult{OrderStatus::PartiallyFilled, outcome.filledQuantity, kSelfTradeReason};
+    }
+    if (outcome.filledQuantity > 0) {
+        return {OrderStatus::PartiallyFilled, outcome.filledQuantity, nullptr};
+    }
+    return {OrderStatus::Accepted, 0, nullptr};
 }
 
-void OrderBook::matchOrders() {
+OrderBook::MatchOutcome OrderBook::matchOrders(OrderSide incomingSide) {
+    MatchOutcome outcome;
+
     //As long as there's a buyer and a seller -> try to match
     while (!bids_.empty() && !asks_.empty()) {
         //Get iterators to get the best price levels
@@ -48,8 +68,19 @@ void OrderBook::matchOrders() {
         Order& topBid = bidQueue.front();
         Order& topAsk = askQueue.front();
 
+        //Self-trade prevention (Cancel-Newest): a trader's incoming order
+        //never trades against their own resting order. The incoming side
+        //stops here instead - the resting order is left untouched
+        if (topBid.traderId == topAsk.traderId) {
+            outcome.selfTradeBlocked = true;
+            uint64_t incomingOrderId = (incomingSide == OrderSide::BUY) ? topBid.orderId : topAsk.orderId;
+            cancelOrder(incomingOrderId);
+            break;
+        }
+
         //Execute trade for max possible overlap quantity
         uint32_t tradeQuantity = std::min(topBid.quantity, topAsk.quantity);
+        outcome.filledQuantity += tradeQuantity;
 
         topBid.quantity -= tradeQuantity;
         topAsk.quantity -= tradeQuantity;
@@ -73,13 +104,15 @@ void OrderBook::matchOrders() {
             asks_.erase(bestAskIter);
         }
     }
+
+    return outcome;
 }
 
-void OrderBook::cancelOrder(uint64_t orderId) {
+CancelStatus OrderBook::cancelOrder(uint64_t orderId) {
     auto indexIt = orderIndex_.find(orderId);
     if (indexIt == orderIndex_.end()) {
         //unknown id, already filled, or already cancelled - safe no-op
-        return;
+        return CancelStatus::NotFound;
     }
 
     const OrderLocation& location = indexIt->second;
@@ -103,6 +136,7 @@ void OrderBook::cancelOrder(uint64_t orderId) {
     }
 
     orderIndex_.erase(indexIt);
+    return CancelStatus::Cancelled;
 }
 
 bool OrderBook::hasBids() const { return !bids_.empty(); }
@@ -122,7 +156,7 @@ void OrderBook::printBook() const {
     for (auto it = asks_.rbegin(); it != asks_.rend(); ++it) {
         uint32_t totalVol = 0;
         for (const auto& order : it->second) totalVol += order.quantity;
-        std::cout << "$" << it->first << " | Vol: " << totalVol << " | Orders: " << it->second.size() << "\n";   
+        std::cout << "$" << it->first << " | Vol: " << totalVol << " | Orders: " << it->second.size() << "\n";
     }
 
     std::cout << "--- BIDS ---\n";
@@ -134,8 +168,10 @@ void OrderBook::printBook() const {
     std::cout << "======================================\n";
 }
 
-void OrderBook::executeMarketOrder(const Order& incomingOrder) {
+OrderResult OrderBook::executeMarketOrder(const Order& incomingOrder) {
     uint32_t remainingQuanitity = incomingOrder.quantity;
+    uint32_t filledQuantity = 0;
+    bool selfTradeBlocked = false;
 
     if (incomingOrder.side == OrderSide::BUY) {
         //A market buy looks through the asks
@@ -144,8 +180,14 @@ void OrderBook::executeMarketOrder(const Order& incomingOrder) {
             auto& askQueue = bestAskIter->second;
             Order& topAsk = askQueue.front();
 
+            if (topAsk.traderId == incomingOrder.traderId) {
+                selfTradeBlocked = true;
+                break;
+            }
+
             uint32_t tradeQuantity = std::min(remainingQuanitity, topAsk.quantity);
             remainingQuanitity -= tradeQuantity;
+            filledQuantity += tradeQuantity;
             topAsk.quantity -= tradeQuantity;
 
             if (topAsk.quantity == 0) {
@@ -163,8 +205,14 @@ void OrderBook::executeMarketOrder(const Order& incomingOrder) {
             auto& bidQueue = bestBidIter->second;
             Order& topBid = bidQueue.front();
 
+            if (topBid.traderId == incomingOrder.traderId) {
+                selfTradeBlocked = true;
+                break;
+            }
+
             uint32_t tradeQuantity = std::min(remainingQuanitity, topBid.quantity);
             remainingQuanitity -= tradeQuantity;
+            filledQuantity += tradeQuantity;
             topBid.quantity -= tradeQuantity;
 
             if (topBid.quantity == 0) {
@@ -176,4 +224,17 @@ void OrderBook::executeMarketOrder(const Order& incomingOrder) {
             }
         }
     }
+
+    if (filledQuantity >= incomingOrder.quantity) {
+        return {OrderStatus::Filled, filledQuantity, nullptr};
+    }
+    if (selfTradeBlocked) {
+        return filledQuantity == 0
+            ? OrderResult{OrderStatus::Rejected, 0, kSelfTradeReason}
+            : OrderResult{OrderStatus::PartiallyFilled, filledQuantity, kSelfTradeReason};
+    }
+    if (filledQuantity > 0) {
+        return {OrderStatus::PartiallyFilled, filledQuantity, nullptr};
+    }
+    return {OrderStatus::Rejected, 0, kNoLiquidityReason};
 }
