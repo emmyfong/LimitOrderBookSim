@@ -1,6 +1,7 @@
 #include "OrderBook.h"
 #include <iostream>
 #include <algorithm> //for std::min
+#include <iterator>  //for std::prev
 
 void OrderBook::addOrder(const Order& order) {
     //Get the market order
@@ -11,11 +12,15 @@ void OrderBook::addOrder(const Order& order) {
 
     //limit orders proceed
     if (order.side == OrderSide::BUY) {
-        bids_[order.price].push_back(order);
+        auto& queue = bids_[order.price];
+        queue.push_back(order);
+        orderIndex_[order.orderId] = {OrderSide::BUY, order.price, std::prev(queue.end())};
     } else {
-        asks_[order.price].push_back(order);
+        auto& queue = asks_[order.price];
+        queue.push_back(order);
+        orderIndex_[order.orderId] = {OrderSide::SELL, order.price, std::prev(queue.end())};
     }
-    
+
     matchOrders();
 }
 
@@ -53,9 +58,11 @@ void OrderBook::matchOrders() {
 
         //clean memeory
         if (topBid.quantity == 0) {
+            orderIndex_.erase(topBid.orderId);
             bidQueue.pop_front();
         }
         if (topAsk.quantity == 0) {
+            orderIndex_.erase(topAsk.orderId);
             askQueue.pop_front();
         }
 
@@ -69,19 +76,33 @@ void OrderBook::matchOrders() {
 }
 
 void OrderBook::cancelOrder(uint64_t orderId) {
-    //Iterate through all price levels in bids
-    for (auto& priceLevel : bids_) {
-        auto& queue = priceLevel.second;
-        for (auto it = queue.begin(); it != queue.end(); ++it) {
-            if (it->orderId == orderId) {
-                queue.erase(it);
-                if (queue.empty()) {
-                    asks_.erase(priceLevel.first);
-                }
-                return;
-            }
+    auto indexIt = orderIndex_.find(orderId);
+    if (indexIt == orderIndex_.end()) {
+        //unknown id, already filled, or already cancelled - safe no-op
+        return;
+    }
+
+    const OrderLocation& location = indexIt->second;
+
+    //orderIndex_ is kept in sync everywhere the book is mutated, so the
+    //price level below is guaranteed to exist.
+    if (location.side == OrderSide::BUY) {
+        auto priceLevelIt = bids_.find(location.price);
+        auto& queue = priceLevelIt->second;
+        queue.erase(location.it);
+        if (queue.empty()) {
+            bids_.erase(priceLevelIt);
+        }
+    } else {
+        auto priceLevelIt = asks_.find(location.price);
+        auto& queue = priceLevelIt->second;
+        queue.erase(location.it);
+        if (queue.empty()) {
+            asks_.erase(priceLevelIt);
         }
     }
+
+    orderIndex_.erase(indexIt);
 }
 
 bool OrderBook::hasBids() const { return !bids_.empty(); }
@@ -128,6 +149,7 @@ void OrderBook::executeMarketOrder(const Order& incomingOrder) {
             topAsk.quantity -= tradeQuantity;
 
             if (topAsk.quantity == 0) {
+                orderIndex_.erase(topAsk.orderId);
                 askQueue.pop_front();
             }
             if (askQueue.empty()) {
@@ -136,7 +158,7 @@ void OrderBook::executeMarketOrder(const Order& incomingOrder) {
         }
     } else {
         //market sell goes through the bids
-        while (remainingQuanitity > 0 && bids_.empty()) {
+        while (remainingQuanitity > 0 && !bids_.empty()) {
             auto bestBidIter = bids_.begin();
             auto& bidQueue = bestBidIter->second;
             Order& topBid = bidQueue.front();
@@ -146,6 +168,7 @@ void OrderBook::executeMarketOrder(const Order& incomingOrder) {
             topBid.quantity -= tradeQuantity;
 
             if (topBid.quantity == 0) {
+                orderIndex_.erase(topBid.orderId);
                 bidQueue.pop_front();
             }
             if (bidQueue.empty()) {

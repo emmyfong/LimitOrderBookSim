@@ -14,11 +14,17 @@ jobs:
         - name: Checkout Repository
           uses: actions/checkout@v3
 
-        - name: Compile Unit Tests
-          run: g++ -std=c++17 -Iinclude src/OrderBook.cpp tests/test_orderbook.cpp -o run_tests
+        - name: Compile OrderBook Unit Tests
+          run: g++ -std=c++17 -Iinclude src/OrderBook.cpp tests/test_orderbook.cpp -o run_tests_orderbook
 
-        - name: Run Unit Tests
-          run: ./run_tests
+        - name: Run OrderBook Unit Tests
+          run: ./run_tests_orderbook
+
+        - name: Compile CSVParser Unit Tests
+          run: g++ -std=c++17 -Iinclude src/CSVParser.cpp tests/test_csvparser.cpp -o run_tests_csvparser
+
+        - name: Run CSVParser Unit Tests
+          run: ./run_tests_csvparser
 
         - name: Compile Main Simulator (Verify Build Doesn't Break)
           run: g++ -std=c++17 -O3 -pthread -Iinclude src/*.cpp -o lob_sim

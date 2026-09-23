@@ -2,6 +2,56 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <stdexcept>
+
+namespace {
+
+//Reads the next comma-separated field, or throws if the line ran out of
+//fields early (e.g. a truncated row).
+std::string nextField(std::stringstream& ss, const char* fieldName) {
+    std::string token;
+    if (!std::getline(ss, token, ',')) {
+        throw std::invalid_argument(std::string("missing field: ") + fieldName);
+    }
+    return token;
+}
+
+//Parses one CSV line into an Order. Throws std::invalid_argument (or
+//std::out_of_range, from stoull/stoul) on any malformed field so the
+//caller can skip just that line instead of crashing the whole parse.
+Order parseLine(const std::string& line) {
+    std::stringstream ss(line);
+    Order order{};
+
+    //convert string to unsigned long long
+    order.orderId = std::stoull(nextField(ss, "orderId"));
+
+    std::string side = nextField(ss, "side");
+    if (side == "BUY") {
+        order.side = OrderSide::BUY;
+    } else if (side == "SELL") {
+        order.side = OrderSide::SELL;
+    } else {
+        throw std::invalid_argument("invalid side: " + side);
+    }
+
+    std::string type = nextField(ss, "type");
+    if (type == "LIMIT") {
+        order.type = OrderType::LIMIT;
+    } else if (type == "MARKET") {
+        order.type = OrderType::MARKET;
+    } else {
+        throw std::invalid_argument("invalid type: " + type);
+    }
+
+    order.price = std::stoull(nextField(ss, "price"));
+    order.quantity = std::stoul(nextField(ss, "quantity")); //string to unsigned long
+    order.timestamp = std::stoull(nextField(ss, "timestamp"));
+
+    return order;
+}
+
+} // namespace
 
 std::vector<Order> CSVParser::parse(const std::string& filename) {
     std::vector<Order> orders;
@@ -15,39 +65,22 @@ std::vector<Order> CSVParser::parse(const std::string& filename) {
     }
 
     std::string line;
+    int lineNumber = 0;
 
     //loop to get every remaining line in the file
     while (std::getline(file, line)) {
-        std::stringstream ss(line);
-        std::string token;
-        Order order;
+        ++lineNumber;
 
-        //get id
-        std::getline(ss, token, ',');
-        //convert string to unsigned long long
-        order.orderId = std::stoull(token);
+        if (line.empty()) {
+            continue;
+        }
 
-        //side
-        std::getline(ss, token, ',');
-        order.side = (token == "BUY") ? OrderSide::BUY : OrderSide::SELL;
-
-        //type
-        std::getline(ss, token, ',');
-        order.type = (token == "LIMIT") ? OrderType::LIMIT : OrderType::MARKET;
-
-        //price
-        std::getline(ss, token, ',');
-        order.price = std::stoull(token);
-
-        //quantity
-        std::getline(ss, token, ',');
-        order.quantity = std::stoul(token); //string to unsigned long
-
-        //timestamp
-        std::getline(ss, token, ',');
-        order.timestamp = std::stoull(token);
-
-        orders.push_back(order);
+        try {
+            orders.push_back(parseLine(line));
+        } catch (const std::exception& e) {
+            std::cerr << "WARNING: Skipping malformed line " << lineNumber
+                       << " (" << e.what() << "): " << line << "\n";
+        }
     }
 
     return orders;

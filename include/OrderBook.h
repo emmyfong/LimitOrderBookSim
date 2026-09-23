@@ -3,6 +3,7 @@
 #include "Order.h"
 #include <map>
 #include <list>
+#include <unordered_map>
 #include <functional>
 #include <cstdint>
 
@@ -36,5 +37,13 @@ private:
 
     //Sellers are sorted in ascending order (lowest price first)
     std::map<uint64_t, std::list<Order>, std::less<uint64_t>> asks_;
-    
+
+    //Where a resting order lives -> cancelOrder can find it without scanning whole book 
+    //Kept in sync everywhere an order is added or removed
+    struct OrderLocation {
+        OrderSide side;
+        uint64_t price;
+        std::list<Order>::iterator it;
+    };
+    std::unordered_map<uint64_t, OrderLocation> orderIndex_;
 };
