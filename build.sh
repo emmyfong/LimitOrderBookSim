@@ -7,3 +7,4 @@ echo "Compiling Limit Order Book Simulator..."
 g++ -std=c++17 -O3 -Iinclude src/*.cpp -o lob_sim
 
 echo "Build successful"
+./lob_sim

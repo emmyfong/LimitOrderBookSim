@@ -1,0 +1,24 @@
+name: C++ CI Pipeline
+
+on:
+    push:
+        branches: ["main"]
+    pull_request:
+        branches: ["main"]
+
+jobs:
+    build-and-test:
+        runs-on: ubuntu-latest
+
+        steps:
+        - name: Checkout Repository
+          uses: actions/checkout@v3
+
+        - name: Compile Unit Tests
+          run: g++ -std=c++17 -Iinclude src/OrderBook.cpp tests/test_orderbook.cpp -o run_tests
+
+        - name: Run Unit Tests
+          run: ./run_tests
+
+        - name: Compile Main Simulator (Verify Build Doesn't Break)
+          run: g++ -std=c++17 -O3 -pthread -Iinclude src/*.cpp -o lob_sim
