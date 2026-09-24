@@ -1,14 +1,4 @@
-// Benchmark: cancelOrder scaling.
-//
-// Compares the OrderBook's current hash-indexed cancel (map::find on price,
-// O(log n), then an O(1) list erase via the stored iterator) against
-// NaiveBidBook below, which mirrors the original implementation this project
-// shipped with: a full linear scan over every price level and every order in
-// each level, O(n) in the number of resting orders.
-//
-// NaiveBidBook is intentionally NOT part of the production OrderBook - it
-// exists only so this benchmark is reproducible from a clean checkout
-// without needing to `git checkout` an old commit.
+//benchmark: cancelOrder's hash-indexed lookup vs the original O(n) scan
 #include "OrderBook.h"
 #include <algorithm>
 #include <chrono>
@@ -25,6 +15,7 @@ namespace {
 constexpr int kTrialsPerSize = 7;
 constexpr uint64_t kBasePrice = 10000;
 
+//mirrors the original scan-based cancelOrder, kept here only for comparison
 class NaiveBidBook {
 public:
     void addOrder(const Order& order) { bids_[order.price].push_back(order); }
@@ -48,15 +39,8 @@ private:
     std::map<uint64_t, std::list<Order>, std::greater<uint64_t>> bids_;
 };
 
-// Each order gets a distinct price (basePrice + i), so every price level
-// holds exactly one order - the worst case for a linear scan, since it
-// can't shortcut by finding several matches in the same list. Cancelling
-// order 1 (the lowest price) forces the scan to walk the entire book,
-// since bids are iterated highest-price-first.
+//one order per price level - worst case for a linear scan
 Order makeOrder(int i) {
-    // traderId is irrelevant to cancel latency (no matching happens in this
-    // benchmark - asks_ is never populated), so it's just set to the same
-    // value as orderId for uniqueness.
     return {static_cast<uint64_t>(i), static_cast<uint64_t>(i), OrderSide::BUY, OrderType::LIMIT,
             kBasePrice + static_cast<uint64_t>(i), 10, static_cast<uint64_t>(i)};
 }

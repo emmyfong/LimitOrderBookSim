@@ -19,7 +19,7 @@ public:
         lock.unlock();
 
         //wake up consumer
-        cond_.notify_one(); 
+        cond_.notify_one();
     }
 
     //consumer uses pop to safely extract item

@@ -160,6 +160,40 @@ void test_different_traders_still_match_normally() {
     std::cout << "[PASS] Different Traders Still Match Normally Test\n";
 }
 
+void test_records_limit_match_as_a_trade() {
+    OrderBook lob;
+
+    lob.addOrder({1, 100, OrderSide::SELL, OrderType::LIMIT, 15000, 100, 1});
+    lob.addOrder({2, 200, OrderSide::BUY, OrderType::LIMIT, 15000, 40, 2});
+
+    const std::vector<Trade>& trades = lob.getTrades();
+    assert(trades.size() == 1);
+    assert(trades[0].buyOrderId == 2);
+    assert(trades[0].sellOrderId == 1);
+    assert(trades[0].buyTraderId == 200);
+    assert(trades[0].sellTraderId == 100);
+    assert(trades[0].price == 15000);
+    assert(trades[0].quantity == 40);
+
+    std::cout << "[PASS] Records Limit Match As A Trade Test\n";
+}
+
+void test_records_market_order_match_as_a_trade() {
+    OrderBook lob;
+
+    lob.addOrder({1, 100, OrderSide::BUY, OrderType::LIMIT, 15000, 50, 1});
+    lob.addOrder({2, 200, OrderSide::SELL, OrderType::MARKET, 0, 50, 2});
+
+    const std::vector<Trade>& trades = lob.getTrades();
+    assert(trades.size() == 1);
+    assert(trades[0].buyOrderId == 1);
+    assert(trades[0].sellOrderId == 2);
+    assert(trades[0].price == 15000);
+    assert(trades[0].quantity == 50);
+
+    std::cout << "[PASS] Records Market Order Match As A Trade Test\n";
+}
+
 int main() {
     std::cout << "Running OrderBook Unit Tests...\n";
 
@@ -173,6 +207,8 @@ int main() {
     test_self_trade_is_rejected_not_matched();
     test_self_trade_market_order_is_rejected();
     test_different_traders_still_match_normally();
+    test_records_limit_match_as_a_trade();
+    test_records_market_order_match_as_a_trade();
 
     std::cout << "ALL TESTS PASSED SUCCESSFULLY.\n";
     return 0;

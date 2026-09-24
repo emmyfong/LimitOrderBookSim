@@ -4,27 +4,38 @@
 #include <map>
 #include <list>
 #include <unordered_map>
+#include <vector>
 #include <functional>
 #include <cstdint>
 
-//Outcome of an addOrder call.
+//one executed trade
+struct Trade {
+    uint64_t buyOrderId;
+    uint64_t sellOrderId;
+    uint64_t buyTraderId;
+    uint64_t sellTraderId;
+    uint64_t price;
+    uint32_t quantity;
+};
+
+//result of an addOrder call
 enum class OrderStatus {
-    Filled,          //fully filled immediately
-    PartiallyFilled, //some quantity filled; see `reason` if the remainder was rejected instead of resting
-    Accepted,        //nothing filled yet; the order rests in the book unfilled
-    Rejected         //nothing filled, and nothing rests in the book
+    Filled,
+    PartiallyFilled,
+    Accepted, //rests in the book, unfilled
+    Rejected  //nothing filled, nothing rests
 };
 
 struct OrderResult {
     OrderStatus status;
     uint32_t filledQuantity = 0;
-    const char* reason = nullptr; //non-null when status == Rejected, or a PartiallyFilled remainder didn't rest
+    const char* reason = nullptr; //set on Rejected, or a PartiallyFilled that didn't rest
 };
 
-//Outcome of a cancelOrder call.
+//result of a cancelOrder call
 enum class CancelStatus {
-    Cancelled, //the order was resting and has been removed
-    NotFound   //unknown id, already filled, or already cancelled - safe no-op
+    Cancelled,
+    NotFound //unknown, already filled, or already cancelled
 };
 
 class OrderBook {
@@ -41,11 +52,12 @@ public:
     bool hasAsks() const;
     uint64_t getBestBid() const;
     uint64_t getBestAsk() const;
+    const std::vector<Trade>& getTrades() const;
 
     void printBook() const;
 
 private:
-    //Outcome of one matching pass triggered by a newly inserted limit order.
+    //outcome of one matching pass
     struct MatchOutcome {
         uint32_t filledQuantity = 0;
         bool selfTradeBlocked = false;
@@ -57,7 +69,7 @@ private:
     //logic for market orders
     OrderResult executeMarketOrder(const Order& order);
 
-    //Buyers are sorted in decending order (highest price first)
+    //Buyers are sorted in descending order (highest price first)
     //std::greater sorts highest key first
     std::map<uint64_t, std::list<Order>, std::greater<uint64_t>> bids_;
 
@@ -72,4 +84,7 @@ private:
         std::list<Order>::iterator it;
     };
     std::unordered_map<uint64_t, OrderLocation> orderIndex_;
+
+    //executed trades, in execution order
+    std::vector<Trade> trades_;
 };

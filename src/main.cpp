@@ -1,20 +1,17 @@
 #include "Simulator.h"
 #include <iostream>
+#include <string>
 
-//Helper vars
-uint64_t currentTimestep = 1;
-uint64_t getNextTime() { return currentTimestep++; }
-
-int main() {
+int main(int argc, char* argv[]) {
     std::cout << "=========================================\n";
     std::cout << "   HIGH-FREQUENCY LOB SIMULATOR (v1.0)   \n";
     std::cout << "=========================================\n";
 
-    //instantiate engine with data file
-    Simulator engine("data/orders.csv");
+    //defaults to the sample data file; pass a path to use a different one
+    std::string dataFile = (argc > 1) ? argv[1] : "data/orders.csv";
 
-    //Run multithreaded simulation
+    Simulator engine(dataFile);
     engine.run();
 
-    return 0;    
+    return 0;
 }

@@ -4,7 +4,8 @@
 set -e
 
 echo "Compiling Limit Order Book Simulator..."
-g++ -std=c++17 -O3 -Iinclude src/*.cpp -o lob_sim
+g++ -std=c++17 -O3 -pthread -Iinclude src/*.cpp -o lob_sim
 
 echo "Build successful"
-./lob_sim
+# Pass an optional CSV path through, e.g. ./build.sh path/to.csv
+./lob_sim "$@"

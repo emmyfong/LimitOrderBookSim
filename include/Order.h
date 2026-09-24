@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
 
 //order direction
 enum class OrderSide {

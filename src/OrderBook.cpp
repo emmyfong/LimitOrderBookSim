@@ -68,9 +68,8 @@ OrderBook::MatchOutcome OrderBook::matchOrders(OrderSide incomingSide) {
         Order& topBid = bidQueue.front();
         Order& topAsk = askQueue.front();
 
-        //Self-trade prevention (Cancel-Newest): a trader's incoming order
-        //never trades against their own resting order. The incoming side
-        //stops here instead - the resting order is left untouched
+        //self-trade prevention (Cancel-Newest): stop the incoming order here
+        //rather than trade against the trader's own resting order
         if (topBid.traderId == topAsk.traderId) {
             outcome.selfTradeBlocked = true;
             uint64_t incomingOrderId = (incomingSide == OrderSide::BUY) ? topBid.orderId : topAsk.orderId;
@@ -85,9 +84,11 @@ OrderBook::MatchOutcome OrderBook::matchOrders(OrderSide incomingSide) {
         topBid.quantity -= tradeQuantity;
         topAsk.quantity -= tradeQuantity;
 
-        std::cout << "TRADE EXECUTED: " << tradeQuantity << " shares at $" << bestAskPrice << "\n";
+        //record the trade
+        trades_.push_back({topBid.orderId, topAsk.orderId, topBid.traderId, topAsk.traderId,
+                            bestAskPrice, tradeQuantity});
 
-        //clean memeory
+        //remove filled orders
         if (topBid.quantity == 0) {
             orderIndex_.erase(topBid.orderId);
             bidQueue.pop_front();
@@ -150,6 +151,10 @@ uint64_t OrderBook::getBestAsk() const {
     return hasAsks() ? asks_.begin()->first : 0;
 }
 
+const std::vector<Trade>& OrderBook::getTrades() const {
+    return trades_;
+}
+
 void OrderBook::printBook() const {
     std::cout << "======== LIMIT ORDER BOOK SIM ========\n";
     std::cout << "--- ASKS ---\n";
@@ -169,13 +174,13 @@ void OrderBook::printBook() const {
 }
 
 OrderResult OrderBook::executeMarketOrder(const Order& incomingOrder) {
-    uint32_t remainingQuanitity = incomingOrder.quantity;
+    uint32_t remainingQuantity = incomingOrder.quantity;
     uint32_t filledQuantity = 0;
     bool selfTradeBlocked = false;
 
     if (incomingOrder.side == OrderSide::BUY) {
         //A market buy looks through the asks
-        while (remainingQuanitity > 0 && !asks_.empty()) {
+        while (remainingQuantity > 0 && !asks_.empty()) {
             auto bestAskIter = asks_.begin();
             auto& askQueue = bestAskIter->second;
             Order& topAsk = askQueue.front();
@@ -185,10 +190,14 @@ OrderResult OrderBook::executeMarketOrder(const Order& incomingOrder) {
                 break;
             }
 
-            uint32_t tradeQuantity = std::min(remainingQuanitity, topAsk.quantity);
-            remainingQuanitity -= tradeQuantity;
+            uint32_t tradeQuantity = std::min(remainingQuantity, topAsk.quantity);
+            remainingQuantity -= tradeQuantity;
             filledQuantity += tradeQuantity;
             topAsk.quantity -= tradeQuantity;
+
+            //executes at the resting order's price
+            trades_.push_back({incomingOrder.orderId, topAsk.orderId, incomingOrder.traderId,
+                                topAsk.traderId, topAsk.price, tradeQuantity});
 
             if (topAsk.quantity == 0) {
                 orderIndex_.erase(topAsk.orderId);
@@ -200,7 +209,7 @@ OrderResult OrderBook::executeMarketOrder(const Order& incomingOrder) {
         }
     } else {
         //market sell goes through the bids
-        while (remainingQuanitity > 0 && !bids_.empty()) {
+        while (remainingQuantity > 0 && !bids_.empty()) {
             auto bestBidIter = bids_.begin();
             auto& bidQueue = bestBidIter->second;
             Order& topBid = bidQueue.front();
@@ -210,10 +219,14 @@ OrderResult OrderBook::executeMarketOrder(const Order& incomingOrder) {
                 break;
             }
 
-            uint32_t tradeQuantity = std::min(remainingQuanitity, topBid.quantity);
-            remainingQuanitity -= tradeQuantity;
+            uint32_t tradeQuantity = std::min(remainingQuantity, topBid.quantity);
+            remainingQuantity -= tradeQuantity;
             filledQuantity += tradeQuantity;
             topBid.quantity -= tradeQuantity;
+
+            //executes at the resting order's price
+            trades_.push_back({topBid.orderId, incomingOrder.orderId, topBid.traderId,
+                                incomingOrder.traderId, topBid.price, tradeQuantity});
 
             if (topBid.quantity == 0) {
                 orderIndex_.erase(topBid.orderId);

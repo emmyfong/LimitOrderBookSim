@@ -19,9 +19,10 @@ producer/consumer thread pipeline, and matched against a live book using price-t
 ## Build & Run
 
 ```bash
-./build.sh      # compiles and runs the simulator against data/orders.csv
-./test.sh       # compiles and runs the unit test suite
-./benchmark.sh  # compiles (-O3) and runs the cancel-latency benchmark
+./build.sh                # compiles and runs the simulator against data/orders.csv
+./build.sh path/to.csv    # or point it at any other CSV in the same format
+./test.sh                 # compiles and runs the unit test suite
+./benchmark.sh            # compiles (-O3) and runs the cancel-latency benchmark
 ```
 
 ## Project Structure
@@ -47,9 +48,14 @@ id,traderId,side,type,price,quantity,timestamp
 trade against belongs to the same `traderId`. If so, the incoming order is rejected outright
 (Cancel-Newest) instead of trading with itself - the resting order is left untouched, and any
 quantity the incoming order already filled against *other* traders earlier in the same call still
-stands. The sample `data/orders.csv` includes a deliberate demo of this (orders 99 and 100, both
-trader 7): order 99 rests a bid at $160.00, and order 100 - a crossing sell from the same trader -
-is rejected rather than matched. Running `./build.sh` prints an `ORDER REJECTED` line for it.
+stands.
+
+The sample `data/orders.csv` triggers this organically: with only 10 traders sharing 100 random
+orders, the same trader occasionally ends up on both sides of a crossing price by chance, and
+`./build.sh` reports each occurrence in the "Rejections" section printed once at the end of the run
+(rejections are collected in-memory, not printed live, for the same reason trades aren't - see
+Performance below). Exactly which order IDs get rejected depends on the random draw, so it isn't
+called out by ID here.
 
 `addOrder` now returns an `OrderResult{status, filledQuantity, reason}` instead of `void`, so a
 caller (or a strategy built on top of this engine) can tell `Filled`, `PartiallyFilled`,
@@ -78,7 +84,19 @@ cancelling the single worst-case order for a freshly built book at each size, me
 | 500,000        | 8050.80         | 3.60         | 2,236x     |
 
 The naive scan's latency grows with book size, as expected for O(n). The indexed cancel stays
-within a few microseconds across three orders of magnitude of book depth.
+within a few microseconds across three orders of magnitude of book depth. The exact multiplier
+varies run to run (system noise on a shared machine, not a code change) - across repeated runs
+it's consistently in the low thousands at 500k orders, not a single precise number.
+
+### End-to-end throughput and latency
+
+Trade execution used to be logged with `std::cout` on every single trade - a syscall sitting
+directly in the matching hot path, which would have dominated any timing measurement and made a
+"high-frequency" claim meaningless. Trades are now recorded into an in-memory log
+(`OrderBook::getTrades()`) instead, and `Simulator` times each `addOrder()` call and reports
+throughput and latency percentiles once at the end of a run, rather than printing anything live -
+visible in the summary `./build.sh` prints regardless of dataset size. For a meaningful throughput
+number rather than the 100-order demo, point it at a larger CSV in the same format.
 
 ## Status
 

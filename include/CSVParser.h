@@ -5,7 +5,7 @@
 #include <string>
 
 class CSVParser {
-    public:
+public:
     //read the csv file and return a list of Order objects
-    static std::vector<Order> parse(const std::string&filename);
+    static std::vector<Order> parse(const std::string& filename);
 };
